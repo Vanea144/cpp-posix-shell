@@ -7,11 +7,15 @@ int main() {
   	std::cerr << std::unitbuf;
 
 	std::string s;
-	std::cout << "$ ";
 
-	while(std::getline(std::cin, s)) {
-		if(s == "exit") break;
+	while(std::cout << "$ ", std::getline(std::cin, s)) {
+		if(s.substr(0, 4) == "exit") return 0;
+		if(s.substr(0, 4) == "echo") {
+			std::string message = s.substr(5);
+			std::cout << message << '\n';
+			continue;
+		}
 		std::cout << s + ": command not found\n"; 	
-		std::cout << "$ ";
 	}
+	return 0;
 }
