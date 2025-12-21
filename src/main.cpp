@@ -8,6 +8,6 @@ int main() {
 
   std::cout << "$ ";
   std::string s;
-  std::getline(cin, s);
+  std::getline(std::cin, s);
   std::cout << s + ": command not found\n"; 
 }
