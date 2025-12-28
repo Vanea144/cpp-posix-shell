@@ -6,6 +6,27 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sstream>
+#include <fcntl.h>
+
+int open_file_redirection(const std::string& filename) {
+	std::cout.flush();
+
+	int file_fd = open(filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if(file_fd < 0) {
+		perror("Open");
+		return -1;
+	}
+	int saved_stdout = dup(STDOUT_FILENO);
+	dup2(file_fd, STDOUT_FILENO);
+	close(file_fd);
+	return saved_stdout;
+}
+
+void restore_file_redirection(const int saved_stdout) {
+	std::cout.flush();
+	dup2(saved_stdout, STDOUT_FILENO);
+	close(saved_stdout);
+}
 
 std::string get_current_dir() {
 	return std::filesystem::current_path().string();
@@ -40,8 +61,10 @@ std::vector<std::string> tokenize(const std::string& input) {
 	for(int i = 0; i < (int)input.size(); i++) {
 		char c = input[i];
 		if(c == '\\' && !in_squotes && !in_dquotes) {
-			++i;
-			current_token += input[i];
+			if(i + 1 < (int)input.size()) {
+				++i;
+				current_token += input[i];
+			}
 		}
 		else if(c == '\\' && in_dquotes) {
 			++i;
@@ -150,13 +173,26 @@ int main() {
 		std::vector<std::string> tokens = tokenize(s);
 		if(tokens.empty()) continue;
 
+		bool redirect = false;
+		int saved_stdout;
+		for(int i = 0; i < (int)tokens.size(); i++) {
+			if(tokens[i] == ">" || tokens[i] == "1>") {
+				std::string filename;
+				if(i+1 < (int)tokens.size()) {
+					filename = tokens[i+1];
+					redirect = true;
+					saved_stdout = open_file_redirection(filename);	
+					tokens.erase(tokens.begin()+i, tokens.begin()+i+2);
+				}
+			}
+		}
 		if(tokens[0] == "exit") return 0;
 		else if(tokens[0] == "echo") {
 			for(int i = 1; i < (int)tokens.size(); i++) {
 				std::cout << tokens[i];
-				if(i == (int)tokens.size()-1) std::cout << '\n';
-				else std::cout << ' ';
+				if(i != (int)tokens.size()-1) std::cout << ' ';
 			}
+			std::cout << '\n';
 		}
 		else if(tokens[0] == "type") {
 			if(tokens.size() < 2) {
@@ -202,6 +238,7 @@ int main() {
 				std::cout << tokens[0] + ": command not found\n";
 			}
 		}
+		if(redirect) restore_file_redirection(saved_stdout);
 	}
 	return 0;
 }
