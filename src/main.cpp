@@ -12,6 +12,14 @@ std::string get_current_dir() {
 	return std::filesystem::current_path().string();
 }
 
+void change_directory(const std::string& target_path) {
+	try {
+		std::filesystem::current_path(target_path);
+	} catch(const std::filesystem::filesystem_error& e) {
+		std::cerr << "cd: " << target_path << ": " << e.code().message() << '\n';
+	}
+}
+
 void notFound(const std::string& s) {
 	std::cout << s + ": command not found\n";
 }
@@ -85,7 +93,7 @@ int main() {
   	std::cerr << std::unitbuf;
 
 	std::string s;
-	std::vector<std::string> commands = {"exit", "type", "echo", "pwd"};
+	std::vector<std::string> commands = {"exit", "type", "echo", "pwd", "cd"};
 	std::sort(commands.begin(), commands.end());
 
 	char *rawPath = std::getenv("PATH");
@@ -134,6 +142,9 @@ int main() {
 		}
 		else if(tokens[0] == "pwd") {
 			std::cout << get_current_dir() << '\n';
+		}
+		else if(tokens[0] == "cd") {
+			change_directory(tokens[1]);
 		}
 		else {
 			std::string full_path = find_path(rawPath, tokens[0]);
