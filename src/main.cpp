@@ -1,5 +1,4 @@
 #include <iostream>
-#include <unistd.h>
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -34,33 +33,27 @@ bool is_executable(const std::string& path) {
 
 std::vector<std::string> tokenize(const std::string& input) {
 	std::vector<std::string> tokens;
-	std::istringstream iss(input);
-	std::string temp;
+	std::string current_token = "";
+	bool in_quotes = false;
 
-	iss >> temp;
-	tokens.push_back(temp);
-	getline(iss >> std::ws, temp);
-	tokens.push_back(temp);
-
-	bool quoted = false;
-        std::string message = tokens[1];
-	tokens.pop_back();
-	std::string current_string = "";
-
-	for(int i = 0; i < (int)message.size(); i++) {
-		if(message[i] == '\'') {
-			quoted = !quoted;
-			continue;
+	for(char c : input) {
+		if(c == '\'') {
+			in_quotes = !in_quotes;
 		}
-		if(!quoted && message[i] == ' ') {
-			if(!current_string.empty())
-				tokens.push_back(current_string);
-			current_string = "";
-			continue;
+		else if(!in_quotes && c == ' ') {
+			if(!current_token.empty()) {
+				tokens.push_back(current_token);
+				current_token.clear();
+			}
 		}
-		current_string += message[i];
+		else {
+			current_token += c;
+		} 
 	}
-	tokens.push_back(current_string);
+
+	if(!current_token.empty()) {
+		tokens.push_back(current_token);
+	}
 
 	return tokens;
 }
