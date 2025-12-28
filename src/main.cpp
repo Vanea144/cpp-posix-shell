@@ -4,9 +4,11 @@
 #include <vector>
 #include <filesystem>
 #include <cstdlib>
+#include <unistd.h>
+#include <sys/wait.h>
 #include <sstream>
 
-void notFound(std::string s) {
+void notFound(const std::string& s) {
 	std::cout << s + ": command not found\n";
 }
 
@@ -16,6 +18,61 @@ bool file_exists(const std::string& filename) {
 
 bool is_executable(const std::string& path) {
 	return (access(path.c_str(), X_OK) == 0);
+}
+
+std::vector<std::string> tokenize(const std::string& input) {
+	std::vector<std::string> tokens;
+	std::istringstream iss(input);
+	std::string temp;
+
+	while(iss >> temp) {
+		tokens.push_back(temp);
+		if((temp == "echo" || temp == "type") && (int)tokens.size() == 1) {
+			getline(iss >> std::ws, temp);
+			tokens.push_back(temp);
+			break;
+		}
+	}
+	return tokens;
+}
+
+std::string find_path(const char* path, const std::string& program_name){
+	if(!path) return "";
+	std::string name(path);
+	std::stringstream ss(name);
+	std::string dir;
+
+	while(std::getline(ss, dir, ':')) {
+		std::string full_path = dir + "/" + program_name;
+		if(file_exists(full_path) && is_executable(full_path)) {
+			return full_path;
+		}
+	}
+	return "";
+}
+
+void execute_program(const std::string& path, const std::vector<std::string>& tokens) {
+	
+	std::vector<char*> args;
+	for(const std::string& s : tokens) {
+		args.push_back(const_cast<char*>(s.c_str()));
+	}
+	args.push_back(nullptr);
+	
+	pid_t pid = fork();
+
+	if(pid == 0) {
+		execv(path.c_str(), args.data());
+		perror("execv");
+		exit(1);
+	}
+	else if(pid > 0) {
+		int status;
+		waitpid(pid, &status, 0);
+	}
+	else {
+		perror("fork");
+	}
 }
 
 int main() {
@@ -45,49 +102,39 @@ int main() {
 	};
 
 	while(std::cout << "$ ", std::getline(std::cin, s)) {
-		std::string command = "";
-		int i;
-		for(i = 0; i < (int)s.length(); i++) {
-			if(s[i] == ' ') {
-				if(command.length()) break;
-				continue;
+		std::vector<std::string> tokens = tokenize(s);
+
+		if(tokens[0] == "exit") return 0;
+		else if(tokens[0] == "echo") {
+			for(int i = 1; i < (int)tokens.size(); i++) {
+				std::cout << tokens[i];
 			}
-			command += s[i];
+			std::cout << '\n';
 		}
-		std::string message = (i+1 >= (int)s.length() ? "" : s.substr(i+1));
-		if(command == "exit") return 0;
-		if(command == "echo") {
-			std::cout << message << '\n';
-			continue;
-		}
-		if(command == "type") {
-			bool ans = builtin_type(message);
-			if(ans) {
-				std::cout << message + " is a shell builtin\n";
+		else if(tokens[0] == "type") {
+			bool is_builtin = builtin_type(tokens[1]);
+			if(is_builtin) {
+				std::cout << tokens[1] + " is a shell builtin\n";
 			}
 			else {
 				if(rawPath != nullptr) {
-					std::string pathString(rawPath);
-					
-					std::stringstream ss(pathString);
-					std::string directory;
-
-					bool fnd = false;
-					while(std::getline(ss, directory, ':')) {
-						std::string fullPath = directory + '/' + message;
-						if(file_exists(fullPath) && 
-						  is_executable(fullPath)) {
-							std::cout << message + " is " + fullPath << '\n';
-							fnd = true;
-							break;
-						}
+					std::string full_path = find_path(rawPath, tokens[1]);
+					if(full_path == "") {
+						std::cout << tokens[1] + ": not found\n";
 					}
-					if(!fnd) std::cout << message << ": not found\n";
-				}	
+					else {
+						std::cout << tokens[1] + " is " + full_path + "\n"; 
+					}
+				}
 			}
-			continue;
 		}
-		notFound(s);	
+		else {
+			std::string full_path = find_path(rawPath, tokens[0]);
+			if(!full_path.empty()) {
+				execute_program(full_path, tokens);
+			}
+			
+		}
 	}
 	return 0;
 }
