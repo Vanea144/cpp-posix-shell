@@ -8,6 +8,10 @@
 #include <sys/wait.h>
 #include <sstream>
 
+std::string get_current_dir() {
+	return std::filesystem::current_path().string();
+}
+
 void notFound(const std::string& s) {
 	std::cout << s + ": command not found\n";
 }
@@ -81,7 +85,7 @@ int main() {
   	std::cerr << std::unitbuf;
 
 	std::string s;
-	std::vector<std::string> commands = {"exit", "type", "echo"};
+	std::vector<std::string> commands = {"exit", "type", "echo", "pwd"};
 	std::sort(commands.begin(), commands.end());
 
 	char *rawPath = std::getenv("PATH");
@@ -127,6 +131,9 @@ int main() {
 					}
 				}
 			}
+		}
+		else if(tokens[0] == "pwd") {
+			std::cout << get_current_dir() << '\n';
 		}
 		else {
 			std::string full_path = find_path(rawPath, tokens[0]);
