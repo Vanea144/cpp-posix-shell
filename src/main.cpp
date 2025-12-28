@@ -181,13 +181,14 @@ int main() {
 		bool redirect = false;
 		int saved_stdout, target_fd;
 		for(int i = 0; i < (int)tokens.size(); i++) {
-			if(tokens[i] == ">" || tokens[i] == "1>" || tokens[i] == "2>" || tokens[i] == ">>" || tokens[i] == "1>>") {
+			if(tokens[i] == ">" || tokens[i] == "1>" || tokens[i] == "2>" || tokens[i] == ">>" || tokens[i] == "1>>" || tokens[i] == "2>>") {
 				std::string filename;
 				if(i+1 < (int)tokens.size()) {
 					filename = tokens[i+1];
 					redirect = true;
-					target_fd = (tokens[i] == "2>" ? STDERR_FILENO : STDOUT_FILENO);
-					saved_stdout = open_file_redirection(filename, target_fd, tokens[i] == ">>" || tokens[i] == "1>>");	
+					target_fd = (tokens[i][0] == '2' ? STDERR_FILENO : STDOUT_FILENO);
+					bool append = tokens[i].find(">>") != std::string::npos;
+					saved_stdout = open_file_redirection(filename, target_fd, append);	
 					tokens.erase(tokens.begin()+i, tokens.begin()+i+2);
 				}
 			}
