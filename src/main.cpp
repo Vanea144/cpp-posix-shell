@@ -42,7 +42,7 @@ std::vector<std::string> tokenize(const std::string& input) {
 			++i;
 			current_token += input[i];
 		}
-		else if(c == '"') {
+		else if(c == '"' && !in_squotes) {
 			in_dquotes = !in_dquotes;
 		}
 		else if(c == '\'' && !in_dquotes) {
