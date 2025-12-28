@@ -36,8 +36,13 @@ std::vector<std::string> tokenize(const std::string& input) {
 	std::string current_token = "";
 	bool in_squotes = false, in_dquotes = false;
 
-	for(char c : input) {
-		if(c == '"') {
+	for(int i = 0; i < (int)input.size(); i++) {
+		char c = input[i];
+		if(c == '\\') {
+			++i;
+			current_token += input[i];
+		}
+		else if(c == '"') {
 			in_dquotes = !in_dquotes;
 		}
 		else if(c == '\'' && !in_dquotes) {
@@ -128,6 +133,7 @@ int main() {
 
 	while(std::cout << "$ ", std::getline(std::cin, s)) {
 		std::vector<std::string> tokens = tokenize(s);
+		if(tokens.empty()) continue;
 
 		if(tokens[0] == "exit") return 0;
 		else if(tokens[0] == "echo") {
@@ -138,6 +144,10 @@ int main() {
 			}
 		}
 		else if(tokens[0] == "type") {
+			if(tokens.size() < 2) {
+				std::cerr << "type: missing argument\n";
+				continue;
+			}
 			bool is_builtin = builtin_type(tokens[1]);
 			if(is_builtin) {
 				std::cout << tokens[1] + " is a shell builtin\n";
@@ -158,6 +168,10 @@ int main() {
 			std::cout << get_current_dir() << '\n';
 		}
 		else if(tokens[0] == "cd") {
+			if(tokens.size() < 2) {
+				change_directory(std::getenv("HOME"));
+				continue;
+			}
 			if(tokens[1] == "~") {
 				const char* home = std::getenv("HOME");
 				if(home) tokens[1] = home;
