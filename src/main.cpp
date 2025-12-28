@@ -38,7 +38,7 @@ std::vector<std::string> tokenize(const std::string& input) {
 
 	for(int i = 0; i < (int)input.size(); i++) {
 		char c = input[i];
-		if(c == '\\') {
+		if(c == '\\' && !in_squotes && !in_dquotes) {
 			++i;
 			current_token += input[i];
 		}
