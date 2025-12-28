@@ -42,6 +42,12 @@ std::vector<std::string> tokenize(const std::string& input) {
 			++i;
 			current_token += input[i];
 		}
+		else if(c == '\\' && in_dquotes) {
+			++i;
+			char next_c = input[i];
+			if(next_c == 'n') current_token += '\n';
+			else current_token += next_c;
+		}
 		else if(c == '"' && !in_squotes) {
 			in_dquotes = !in_dquotes;
 		}
