@@ -35,7 +35,7 @@ std::vector<std::string> tokenize(const std::string& input) {
 	std::vector<std::string> tokens;
 	std::string current_token = "";
 	bool in_squotes = false, in_dquotes = false;
-	std::vector<char> escaped = {'"', '`', '$', '\\'};
+	std::vector<char> escaped = {'"', '\\'};
 
 	for(int i = 0; i < (int)input.size(); i++) {
 		char c = input[i];
@@ -46,17 +46,14 @@ std::vector<std::string> tokenize(const std::string& input) {
 		else if(c == '\\' && in_dquotes) {
 			++i;
 			char next_c = input[i];
-			if(next_c == 'n') current_token += '\n';
-			else {
-				for(auto it : escaped) {
-					if(next_c == it) {
-						current_token += it;
-						break;
-					}
-					if(it == escaped.back()) {
-						--i;
-						current_token += '\\';
-					}
+			for(auto it : escaped) {
+				if(next_c == it) {
+					current_token += it;
+					break;
+				}
+				if(it == escaped.back()) {
+					--i;
+					current_token += '\\';
 				}
 			}
 		}
