@@ -144,6 +144,10 @@ int main() {
 			std::cout << get_current_dir() << '\n';
 		}
 		else if(tokens[0] == "cd") {
+			if(tokens[1] == "~") {
+				const char* home = std::getenv("HOME");
+				if(home) tokens[1] = home;
+			}
 			change_directory(tokens[1]);
 		}
 		else {
