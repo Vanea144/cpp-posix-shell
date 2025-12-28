@@ -133,7 +133,9 @@ int main() {
 			if(!full_path.empty()) {
 				execute_program(full_path, tokens);
 			}
-			
+			else {
+				std::cout << tokens[0] + ": command not found\n";
+			}
 		}
 	}
 	return 0;
