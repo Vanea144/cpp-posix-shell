@@ -37,14 +37,31 @@ std::vector<std::string> tokenize(const std::string& input) {
 	std::istringstream iss(input);
 	std::string temp;
 
-	while(iss >> temp) {
-		tokens.push_back(temp);
-		if((temp == "echo" || temp == "type") && (int)tokens.size() == 1) {
-			getline(iss >> std::ws, temp);
-			tokens.push_back(temp);
-			break;
+	iss >> temp;
+	tokens.push_back(temp);
+	getline(iss >> std::ws, temp);
+	tokens.push_back(temp);
+
+	bool quoted = false;
+        std::string message = tokens[1];
+	tokens.pop_back();
+	std::string current_string = "";
+
+	for(int i = 0; i < (int)message.size(); i++) {
+		if(message[i] == '\'') {
+			quoted = !quoted;
+			continue;
 		}
+		if(!quoted && message[i] == ' ') {
+			if(!current_string.empty())
+				tokens.push_back(current_string);
+			current_string = "";
+			continue;
+		}
+		current_string += message[i];
 	}
+	tokens.push_back(current_string);
+
 	return tokens;
 }
 
@@ -118,25 +135,6 @@ int main() {
 
 		if(tokens[0] == "exit") return 0;
 		else if(tokens[0] == "echo") {
-			bool quoted = false;
-			std::string message = tokens[1];
-			tokens.pop_back();
-			std::string current_string = "";
-
-			for(int i = 0; i < (int)message.size(); i++) {
-				if(message[i] == '\'') {
-					quoted = !quoted;
-					continue;
-				}
-				if(!quoted && message[i] == ' ') {
-					if(!current_string.empty())
-						tokens.push_back(current_string);
-					current_string = "";
-					continue;
-				}
-				current_string += message[i];
-			}
-			tokens.push_back(current_string);
 			for(int i = 1; i < (int)tokens.size(); i++) {
 				std::cout << tokens[i];
 				if(i == (int)tokens.size()-1) std::cout << '\n';
