@@ -34,13 +34,16 @@ bool is_executable(const std::string& path) {
 std::vector<std::string> tokenize(const std::string& input) {
 	std::vector<std::string> tokens;
 	std::string current_token = "";
-	bool in_quotes = false;
+	bool in_squotes = false, in_dquotes = false;
 
 	for(char c : input) {
-		if(c == '\'') {
-			in_quotes = !in_quotes;
+		if(c == '"') {
+			in_dquotes = !in_dquotes;
 		}
-		else if(!in_quotes && c == ' ') {
+		else if(c == '\'' && !in_dquotes) {
+			in_squotes = !in_squotes;
+		}
+		else if(!in_squotes && !in_dquotes && c == ' ') {
 			if(!current_token.empty()) {
 				tokens.push_back(current_token);
 				current_token.clear();
