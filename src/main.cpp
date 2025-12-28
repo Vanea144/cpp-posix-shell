@@ -8,23 +8,25 @@
 #include <sstream>
 #include <fcntl.h>
 
-int open_file_redirection(const std::string& filename) {
+int open_file_redirection(const std::string& filename, int target_fd) {	
 	std::cout.flush();
+	std::cerr.flush();
 
 	int file_fd = open(filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 	if(file_fd < 0) {
 		perror("Open");
 		return -1;
 	}
-	int saved_stdout = dup(STDOUT_FILENO);
-	dup2(file_fd, STDOUT_FILENO);
+	int saved_stdout = dup(target_fd);
+	dup2(file_fd, target_fd);
 	close(file_fd);
 	return saved_stdout;
 }
 
-void restore_file_redirection(const int saved_stdout) {
+void restore_file_redirection(const int saved_stdout, int target_fd) {
 	std::cout.flush();
-	dup2(saved_stdout, STDOUT_FILENO);
+	std::cerr.flush();
+	dup2(saved_stdout, target_fd);
 	close(saved_stdout);
 }
 
@@ -174,14 +176,15 @@ int main() {
 		if(tokens.empty()) continue;
 
 		bool redirect = false;
-		int saved_stdout;
+		int saved_stdout, target_fd;
 		for(int i = 0; i < (int)tokens.size(); i++) {
-			if(tokens[i] == ">" || tokens[i] == "1>") {
+			if(tokens[i] == ">" || tokens[i] == "1>" || tokens[i] == "2>") {
 				std::string filename;
 				if(i+1 < (int)tokens.size()) {
 					filename = tokens[i+1];
 					redirect = true;
-					saved_stdout = open_file_redirection(filename);	
+					target_fd = (tokens[i] == "2>" ? STDERR_FILENO : STDOUT_FILENO);
+					saved_stdout = open_file_redirection(filename, target_fd);	
 					tokens.erase(tokens.begin()+i, tokens.begin()+i+2);
 				}
 			}
@@ -238,7 +241,7 @@ int main() {
 				std::cout << tokens[0] + ": command not found\n";
 			}
 		}
-		if(redirect) restore_file_redirection(saved_stdout);
+		if(redirect) restore_file_redirection(saved_stdout, target_fd);
 	}
 	return 0;
 }
