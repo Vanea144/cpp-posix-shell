@@ -37,7 +37,7 @@ void handleTab(std::string& current_input, const std::vector<std::string>& comma
 		current_input = matches[0] + " ";
 	}
 	else if(matches.size() > 1) {
-		std::cout << "\x07"; 
+		std::cout << "\x07" << std::flush; 
 	}
 }
 
