@@ -7,6 +7,39 @@
 #include <sys/wait.h>
 #include <sstream>
 #include <fcntl.h>
+#include <termios.h>
+
+struct termios orig_termios;
+
+void disableRawMode() {
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
+}
+
+void enableRawMode() {
+	tcgetattr(STDIN_FILENO, &orig_termios);
+	atexit(disableRawMode);
+
+	struct termios raw = orig_termios;
+	raw.c_lflag &= ~(ICANON | ECHO);
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+void handleTab(std::string& current_input, const std::vector<std::string>& commands) {
+	std::vector<std::string> matches;
+	for(const std::string& s : commands) {
+		if(s.find(current_input) == 0) {
+			matches.push_back(s);
+		}
+	}
+	if(matches.size() == 1) {
+		std::string suffix = matches[0].substr(current_input.length());
+		std::cout << suffix << ' ';
+		current_input = matches[0] + " ";
+	}
+	else if(matches.size() > 1) {
+		std::cout << "\a";
+	}
+}
 
 int open_file_redirection(const std::string& filename, int target_fd, bool append = false) {	
 	std::cout.flush();
@@ -158,7 +191,7 @@ int main() {
 	std::sort(commands.begin(), commands.end());
 
 	char *rawPath = std::getenv("PATH");
-
+	char c;
 	auto builtin_type = [&](std::string cmnd) {
 		int l = 0, r = commands.size()-1;
 		while(l <= r) {
@@ -174,78 +207,106 @@ int main() {
 		return false;
 	};
 
-	while(std::cout << "$ ", std::getline(std::cin, s)) {
-		std::vector<std::string> tokens = tokenize(s);
-		if(tokens.empty()) continue;
-
-		bool redirect = false;
-		int saved_stdout, target_fd;
-		for(int i = 0; i < (int)tokens.size(); i++) {
-			if(tokens[i] == ">" || tokens[i] == "1>" || tokens[i] == "2>" || tokens[i] == ">>" || tokens[i] == "1>>" || tokens[i] == "2>>") {
-				std::string filename;
-				if(i+1 < (int)tokens.size()) {
-					filename = tokens[i+1];
-					redirect = true;
-					target_fd = (tokens[i][0] == '2' ? STDERR_FILENO : STDOUT_FILENO);
-					bool append = tokens[i].find(">>") != std::string::npos;
-					saved_stdout = open_file_redirection(filename, target_fd, append);	
-					tokens.erase(tokens.begin()+i, tokens.begin()+i+2);
-				}
-			}
-		}
-		if(tokens[0] == "exit") return 0;
-		else if(tokens[0] == "echo") {
-			for(int i = 1; i < (int)tokens.size(); i++) {
-				std::cout << tokens[i];
-				if(i != (int)tokens.size()-1) std::cout << ' ';
-			}
+	enableRawMode();
+	std::string input_buffer = "";
+	std::cout << "$ ";
+	while(read(STDIN_FILENO, &c, 1) == 1) {
+		if(c == '\n') {
 			std::cout << '\n';
-		}
-		else if(tokens[0] == "type") {
-			if(tokens.size() < 2) {
-				std::cerr << "type: missing argument\n";
+			std::vector<std::string> tokens = tokenize(input_buffer);
+			input_buffer = "";
+			if(tokens.empty()) {
+				std::cout << "$ ";
 				continue;
 			}
-			bool is_builtin = builtin_type(tokens[1]);
-			if(is_builtin) {
-				std::cout << tokens[1] + " is a shell builtin\n";
+
+			bool redirect = false;
+			int saved_stdout, target_fd;
+			for(int i = 0; i < (int)tokens.size(); i++) {
+				if(tokens[i] == ">" || tokens[i] == "1>" || tokens[i] == "2>" || tokens[i] == ">>" || tokens[i] == "1>>" || tokens[i] == "2>>") {
+					std::string filename;
+					if(i+1 < (int)tokens.size()) {
+						filename = tokens[i+1];
+						redirect = true;
+						target_fd = (tokens[i][0] == '2' ? STDERR_FILENO : STDOUT_FILENO);
+						bool append = tokens[i].find(">>") != std::string::npos;
+						saved_stdout = open_file_redirection(filename, target_fd, append);	
+						tokens.erase(tokens.begin()+i, tokens.begin()+i+2);
+						--i;
+					}
+				}
+			}
+			if(tokens[0] == "exit") return 0;
+			else if(tokens[0] == "echo") {
+				for(int i = 1; i < (int)tokens.size(); i++) {
+					std::cout << tokens[i];
+					if(i != (int)tokens.size()-1) std::cout << ' ';
+				}
+				std::cout << '\n';
+			}
+			else if(tokens[0] == "type") {
+				if(tokens.size() < 2) {
+					std::cerr << "type: missing argument\n";
+					continue;
+				}
+				bool is_builtin = builtin_type(tokens[1]);
+				if(is_builtin) {
+					std::cout << tokens[1] + " is a shell builtin\n";
+				}
+				else {
+					if(rawPath != nullptr) {
+						std::string full_path = find_path(rawPath, tokens[1]);
+						if(full_path == "") {
+							std::cout << tokens[1] + ": not found\n";
+						}
+						else {
+							std::cout << tokens[1] + " is " + full_path + "\n"; 
+						}
+					}
+				}
+			}
+			else if(tokens[0] == "pwd") {
+				std::cout << get_current_dir() << '\n';
+			}
+			else if(tokens[0] == "cd") {
+				if(tokens.size() < 2) {
+					change_directory(std::getenv("HOME"));
+					continue;
+				}
+				if(tokens[1] == "~") {
+					const char* home = std::getenv("HOME");
+					if(home) tokens[1] = home;
+				}
+				change_directory(tokens[1]);
 			}
 			else {
-				if(rawPath != nullptr) {
-					std::string full_path = find_path(rawPath, tokens[1]);
-					if(full_path == "") {
-						std::cout << tokens[1] + ": not found\n";
-					}
-					else {
-						std::cout << tokens[1] + " is " + full_path + "\n"; 
-					}
+				std::string full_path = find_path(rawPath, tokens[0]);
+				if(!full_path.empty()) {
+					execute_program(full_path, tokens);
+				}
+				else {
+					std::cout << tokens[0] + ": command not found\n";
 				}
 			}
+			if(redirect) restore_file_redirection(saved_stdout, target_fd);
+			std::cout << "$ ";
 		}
-		else if(tokens[0] == "pwd") {
-			std::cout << get_current_dir() << '\n';
+		else if(c == 9) {
+			handleTab(input_buffer, commands);
 		}
-		else if(tokens[0] == "cd") {
-			if(tokens.size() < 2) {
-				change_directory(std::getenv("HOME"));
-				continue;
+		else if(c == 4) {
+			break;
+		}
+		else if(c == 127) {
+			if(!input_buffer.empty()) {
+				input_buffer.pop_back();
+				std::cout << "\b \b";
 			}
-			if(tokens[1] == "~") {
-				const char* home = std::getenv("HOME");
-				if(home) tokens[1] = home;
-			}
-			change_directory(tokens[1]);
 		}
 		else {
-			std::string full_path = find_path(rawPath, tokens[0]);
-			if(!full_path.empty()) {
-				execute_program(full_path, tokens);
-			}
-			else {
-				std::cout << tokens[0] + ": command not found\n";
-			}
+			input_buffer += c;
+			std::cout << c;
 		}
-		if(redirect) restore_file_redirection(saved_stdout, target_fd);
 	}
 	return 0;
 }
