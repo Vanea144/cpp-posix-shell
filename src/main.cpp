@@ -8,6 +8,7 @@
 #include <sstream>
 #include <fcntl.h>
 #include <termios.h>
+#include <algorithm>
 
 struct termios orig_termios;
 
@@ -17,29 +18,64 @@ void disableRawMode() {
 
 void enableRawMode() {
 	tcgetattr(STDIN_FILENO, &orig_termios);
-	atexit(disableRawMode);
-
 	struct termios raw = orig_termios;
-	raw.c_lflag &= ~(ICANON | ECHO);
+	atexit(disableRawMode);
+	raw.c_lflag &= ~(ECHO | ICANON);
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
-void handleTab(std::string& current_input, const std::vector<std::string>& commands) {
+bool is_executable(const std::string& path) {
+        return (access(path.c_str(), X_OK) == 0);
+}
+
+bool handleTabExecutable(std::string& input_buffer) {
+	char* raw_path = std::getenv("PATH");
+	if(!raw_path) return false;
+        std::string name(raw_path);
+        std::stringstream ss(name);
+        std::string dir;
+
+        while(std::getline(ss, dir, ':')) {
+		std::error_code ec;
+		std::filesystem::directory_iterator it(dir, ec);
+		if(ec) continue;
+
+		for(const auto& entry : it) {	
+			std::string file_path = entry.path().string();
+			if(!entry.is_regular_file(ec)) continue;
+			if(!is_executable(file_path)) continue;
+
+			std::string file_name = entry.path().filename().string();
+			if(file_name.find(input_buffer) == 0) {
+				std::string suffix = file_name.substr(input_buffer.size());
+				std::cout << suffix << ' ';
+				input_buffer += suffix+" ";
+				return true;
+			}
+		}			
+        }
+        return false;
+}
+
+void handleTab(std::string& input_buffer, const std::vector<std::string>& commands) {
 	std::vector<std::string> matches;
-	for(const std::string& s : commands) {
-		if(s.find(current_input) == 0) {
+	for(const auto& s : commands) {
+		if(s.find(input_buffer) == 0) {
 			matches.push_back(s);
 		}
 	}
 	if(matches.size() == 1) {
-		std::string suffix = matches[0].substr(current_input.length());
-		std::cout << suffix << ' ';
-		current_input = matches[0] + " ";
+		std::string suffix = matches[0].substr(input_buffer.size());
+		std::cout << suffix + " ";
+		input_buffer += suffix+" ";
 	}
 	else {
-		std::cout << "\x07" << std::flush; 
+		if(!handleTabExecutable(input_buffer)) {
+			std::cout << "\a";
+		}
 	}
 }
+
 
 int open_file_redirection(const std::string& filename, int target_fd, bool append = false) {	
 	std::cout.flush();
@@ -84,10 +120,6 @@ void notFound(const std::string& s) {
 
 bool file_exists(const std::string& filename) {
 	return std::filesystem::exists(filename);
-}
-
-bool is_executable(const std::string& path) {
-	return (access(path.c_str(), X_OK) == 0);
 }
 
 std::vector<std::string> tokenize(const std::string& input) {
@@ -138,7 +170,7 @@ std::vector<std::string> tokenize(const std::string& input) {
 	if(!current_token.empty()) {
 		tokens.push_back(current_token);
 	}
-	//
+
 	return tokens;
 }
 
@@ -158,7 +190,6 @@ std::string find_path(const char* path, const std::string& program_name){
 }
 
 void execute_program(const std::string& path, const std::vector<std::string>& tokens) {
-	
 	std::vector<char*> args;
 	for(const std::string& s : tokens) {
 		args.push_back(const_cast<char*>(s.c_str()));
@@ -170,7 +201,7 @@ void execute_program(const std::string& path, const std::vector<std::string>& to
 	if(pid == 0) {
 		execv(path.c_str(), args.data());
 		perror("execv");
-		exit(1);
+		_exit(1);
 	}
 	else if(pid > 0) {
 		int status;
@@ -186,12 +217,11 @@ int main() {
   	std::cout << std::unitbuf;
   	std::cerr << std::unitbuf;
 
-	std::string s;
+	enableRawMode();
 	std::vector<std::string> commands = {"exit", "type", "echo", "pwd", "cd"};
 	std::sort(commands.begin(), commands.end());
 
 	char *rawPath = std::getenv("PATH");
-	char c;
 	auto builtin_type = [&](std::string cmnd) {
 		int l = 0, r = commands.size()-1;
 		while(l <= r) {
@@ -207,7 +237,7 @@ int main() {
 		return false;
 	};
 
-	enableRawMode();
+	char c;
 	std::string input_buffer = "";
 	std::cout << "$ ";
 	while(read(STDIN_FILENO, &c, 1) == 1) {
@@ -231,7 +261,7 @@ int main() {
 						target_fd = (tokens[i][0] == '2' ? STDERR_FILENO : STDOUT_FILENO);
 						bool append = tokens[i].find(">>") != std::string::npos;
 						saved_stdout = open_file_redirection(filename, target_fd, append);	
-						tokens.erase(tokens.begin()+i, tokens.begin()+i+2);
+						tokens.erase(tokens.begin() + i, tokens.begin() + i + 2);
 						--i;
 					}
 				}
