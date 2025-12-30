@@ -50,7 +50,6 @@ void handleTab(std::string& input_buffer, const std::vector<std::string>& comman
 		std::stringstream ss(name);
 		std::string dir;
 
-		std::vector<std::string> matches;
 		while(std::getline(ss, dir, ':')) {
 			std::error_code ec;
 			std::filesystem::directory_iterator it(dir, ec);
@@ -70,7 +69,7 @@ void handleTab(std::string& input_buffer, const std::vector<std::string>& comman
 	}
 	std::sort(matches.begin(), matches.end());
 	matches.erase(unique(matches.begin(), matches.end()), matches.end());
-	
+
 	if(matches.empty()) {
 		std::cout << '\a';
 	}
@@ -81,27 +80,27 @@ void handleTab(std::string& input_buffer, const std::vector<std::string>& comman
 	}
 	else {
 		bool is_first_prefix = true;
-		for(int i = 1; i < (int)matches.size(); i++) {
-			if(!is_prefix(matches[0], matches[i])) is_first_prefix = false;
-		}
-		if(is_first_prefix) {
-			std::string suffix = matches[0].substr(input_buffer.size());
-                	std::cout << suffix;
-               		input_buffer = matches[0];
-			return ;
-		}
+                for(int i = 1; i < (int)matches.size(); i++) {
+                        if(!is_prefix(matches[0], matches[i])) is_first_prefix = false;
+                }
+                if(is_first_prefix) {
+                        std::string suffix = matches[0].substr(input_buffer.size());
+                        std::cout << suffix;
+                        input_buffer = matches[0];
+                        return ;
+                }
 		if(last_tab) {
+			std::cout << '\n';
 			for(const auto &m : matches) {
 				std::cout << m << "  ";
 			}
-			std::cout << "\n$" << input_buffer;
+			std::cout << "\n$ " << input_buffer;
 		}
 		else {
 			std::cout << '\a';
 		}
 	}
 }
-
 
 int open_file_redirection(const std::string& filename, int target_fd, bool append = false) {	
 	std::cout.flush();
