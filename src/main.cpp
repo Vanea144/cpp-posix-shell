@@ -11,6 +11,7 @@
 #include <algorithm>
 
 struct termios orig_termios;
+bool last_tab;
 
 void disableRawMode() {
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
@@ -35,6 +36,7 @@ bool handleTabExecutable(std::string& input_buffer) {
         std::stringstream ss(name);
         std::string dir;
 
+	std::vector<std::string> matches;
         while(std::getline(ss, dir, ':')) {
 		std::error_code ec;
 		std::filesystem::directory_iterator it(dir, ec);
@@ -47,13 +49,27 @@ bool handleTabExecutable(std::string& input_buffer) {
 
 			std::string file_name = entry.path().filename().string();
 			if(file_name.find(input_buffer) == 0) {
-				std::string suffix = file_name.substr(input_buffer.size());
-				std::cout << suffix << ' ';
-				input_buffer += suffix+" ";
-				return true;
+				matches.push_back(file_name);
 			}
 		}			
         }
+	if(matches.size() == 1) {
+		std::string suffix = matches[0].substr(input_buffer.size());
+		std::cout << suffix << ' ';
+		input_buffer += suffix + " ";
+		return true;
+	}
+	if(matches.size() > 1 && last_tab) {
+		sort(matches.begin(), matches.end());
+		std::cout << '\n';
+		for(const auto& match : matches) {
+			std::cout << match;
+			if(match == matches.back()) std::cout << '\n';
+			else std::cout << "  ";
+		}
+		std::cout << "$ " + input_buffer;
+		return true;
+	}
         return false;
 }
 
@@ -323,6 +339,8 @@ int main() {
 		}
 		else if(c == 9) {
 			handleTab(input_buffer, commands);
+			last_tab = true;
+			continue;
 		}
 		else if(c == 4) {
 			break;
@@ -337,6 +355,7 @@ int main() {
 			input_buffer += c;
 			std::cout << c;
 		}
+		last_tab = false;
 	}
 	return 0;
 }
