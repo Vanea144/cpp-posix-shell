@@ -86,8 +86,8 @@ void handleTab(std::string& input_buffer, const std::vector<std::string>& comman
 		}
 		if(is_first_prefix) {
 			std::string suffix = matches[0].substr(input_buffer.size());
-                	std::cout << suffix << " ";
-               		input_buffer = matches[0] + " ";
+                	std::cout << suffix;
+               		input_buffer = matches[0];
 			return ;
 		}
 		if(last_tab) {
