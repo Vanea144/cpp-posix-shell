@@ -29,49 +29,13 @@ bool is_executable(const std::string& path) {
         return (access(path.c_str(), X_OK) == 0);
 }
 
-bool handleTabExecutable(std::string& input_buffer) {
-	char* raw_path = std::getenv("PATH");
-	if(!raw_path) return false;
-        std::string name(raw_path);
-        std::stringstream ss(name);
-        std::string dir;
-
-	std::vector<std::string> matches;
-        while(std::getline(ss, dir, ':')) {
-		std::error_code ec;
-		std::filesystem::directory_iterator it(dir, ec);
-		if(ec) continue;
-
-		for(const auto& entry : it) {	
-			std::string file_path = entry.path().string();
-			if(!entry.is_regular_file(ec)) continue;
-			if(!is_executable(file_path)) continue;
-
-			std::string file_name = entry.path().filename().string();
-			if(file_name.find(input_buffer) == 0) {
-				matches.push_back(file_name);
-			}
-		}			
-        }
-	if(matches.size() == 1) {
-		std::string suffix = matches[0].substr(input_buffer.size());
-		std::cout << suffix << ' ';
-		input_buffer += suffix + " ";
-		return true;
+bool is_prefix(std::string pref, std::string word) {
+	if(word.size() < pref.size()) return false;
+	for(int i = 0; i < (int)pref.size(); i++) {
+		if(pref[i] != word[i]) return false;
 	}
-	if(matches.size() > 1 && last_tab) {
-		sort(matches.begin(), matches.end());
-		std::cout << '\n';
-		for(const auto& match : matches) {
-			std::cout << match;
-			if(match == matches.back()) std::cout << '\n';
-			else std::cout << "  ";
-		}
-		std::cout << "$ " + input_buffer;
-		return true;
-	}
-        return false;
-}
+	return true;
+} 
 
 void handleTab(std::string& input_buffer, const std::vector<std::string>& commands) {
 	std::vector<std::string> matches;
@@ -80,14 +44,60 @@ void handleTab(std::string& input_buffer, const std::vector<std::string>& comman
 			matches.push_back(s);
 		}
 	}
-	if(matches.size() == 1) {
+	char* raw_path = std::getenv("PATH");
+        if(raw_path) {
+		std::string name(raw_path);
+		std::stringstream ss(name);
+		std::string dir;
+
+		std::vector<std::string> matches;
+		while(std::getline(ss, dir, ':')) {
+			std::error_code ec;
+			std::filesystem::directory_iterator it(dir, ec);
+			if(ec) continue;
+
+			for(const auto& entry : it) {
+				std::string file_path = entry.path().string();
+				if(!entry.is_regular_file(ec)) continue;
+				if(!is_executable(file_path)) continue;
+
+				std::string file_name = entry.path().filename().string();
+				if(file_name.find(input_buffer) == 0) {
+					matches.push_back(file_name);
+				}
+			}
+		}
+	}
+	std::sort(matches.begin(), matches.end());
+	matches.erase(unique(matches.begin(), matches.end()), matches.end());
+	
+	if(matches.empty()) {
+		std::cout << '\a';
+	}
+	else if(matches.size() == 1) {
 		std::string suffix = matches[0].substr(input_buffer.size());
-		std::cout << suffix + " ";
-		input_buffer += suffix+" ";
+		std::cout << suffix << " ";
+		input_buffer = matches[0] + " ";
 	}
 	else {
-		if(!handleTabExecutable(input_buffer)) {
-			std::cout << "\a";
+		bool is_first_prefix = true;
+		for(int i = 1; i < (int)matches.size(); i++) {
+			if(!is_prefix(matches[0], matches[i])) is_first_prefix = false;
+		}
+		if(is_first_prefix) {
+			std::string suffix = matches[0].substr(input_buffer.size());
+                	std::cout << suffix << " ";
+               		input_buffer = matches[0] + " ";
+			return ;
+		}
+		if(last_tab) {
+			for(const auto &m : matches) {
+				std::cout << m << "  ";
+			}
+			std::cout << "\n$" << input_buffer;
+		}
+		else {
+			std::cout << '\a';
 		}
 	}
 }
