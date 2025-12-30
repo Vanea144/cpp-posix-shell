@@ -275,17 +275,25 @@ int main() {
 				continue;
 			}
 
-			bool redirect = false;
-			int saved_stdout, target_fd;
+			int saved_stdout = -1, saved_stderr = -1, target_fd;
 			for(int i = 0; i < (int)tokens.size(); i++) {
 				if(tokens[i] == ">" || tokens[i] == "1>" || tokens[i] == "2>" || tokens[i] == ">>" || tokens[i] == "1>>" || tokens[i] == "2>>") {
 					std::string filename;
 					if(i+1 < (int)tokens.size()) {
 						filename = tokens[i+1];
-						redirect = true;
 						target_fd = (tokens[i][0] == '2' ? STDERR_FILENO : STDOUT_FILENO);
 						bool append = tokens[i].find(">>") != std::string::npos;
-						saved_stdout = open_file_redirection(filename, target_fd, append);	
+						int dummy = open_file_redirection(filename, target_fd, append);
+						if(target_fd == STDOUT_FILENO) {
+							if(saved_stdout == -1) {
+								saved_stdout = dummy;
+							}
+						}
+						else {
+							if(saved_stderr == -1) {
+								saved_stderr = dummy;
+							}
+						}
 						tokens.erase(tokens.begin() + i, tokens.begin() + i + 2);
 						--i;
 					}
@@ -343,7 +351,8 @@ int main() {
 					std::cout << tokens[0] + ": command not found\n";
 				}
 			}
-			if(redirect) restore_file_redirection(saved_stdout, target_fd);
+			if(saved_stdout != -1) restore_file_redirection(saved_stdout, STDOUT_FILENO);
+			if(saved_stderr != -1) restore_file_redirection(saved_stderr, STDERR_FILENO);
 			std::cout << "$ ";
 		}
 		else if(c == 9) {
