@@ -234,11 +234,11 @@ pid_t execute_program(const std::string& path, const std::vector<std::string>& t
 	return pid;
 }
 
-void handleLineLogic(std::vector<std::string>& tokens, bool needToWait = true) {
+void handleLineLogic(std::vector<std::string>& tokens, std::vector<std::string>& history, bool needToWait = true) {
 	std::vector<std::string> commands = {"exit", "type", "echo", "pwd", "cd", "history"};
         std::sort(commands.begin(), commands.end());
 
-        char *rawPath = std::getenv("PATH");
+	char *rawPath = std::getenv("PATH");
         auto builtin_type = [&](std::string cmnd) {
                 int l = 0, r = commands.size()-1;
                 while(l <= r) {
@@ -323,6 +323,12 @@ void handleLineLogic(std::vector<std::string>& tokens, bool needToWait = true) {
 			change_directory(tokens[1]);
 		}
 	}
+	else if(tokens[0] == "history") {
+		for(size_t i = 0; i < history.size(); i++) {
+			std::cout << '\t';
+			std::cout << i+1 << ' ' << history[i] << '\n';
+		}
+	}
 	else {
 		std::string full_path = find_path(rawPath, tokens[0]);
 		if(!full_path.empty()) {
@@ -347,6 +353,7 @@ int main() {
 	std::vector<std::string> commands = {"exit", "type", "echo", "pwd", "cd", "history"};
 	std::sort(commands.begin(), commands.end());
 
+	std::vector<std::string> history;
 	char c;
 	std::string input_buffer = "";
 	std::cout << "$ ";
@@ -355,6 +362,8 @@ int main() {
 		//if(c == '\r') continue;
 		if(c == '\n') {
 			std::cout << '\n';
+			if(!input_buffer.empty())
+				history.push_back(input_buffer);
 			std::vector<std::string> tokens = tokenize(input_buffer);
 			input_buffer = "";
 			if(tokens.empty()) {
@@ -394,7 +403,7 @@ int main() {
 							close(fds[0]);
 							close(fds[1]);
 						}
-						handleLineLogic(cmds[i], true);
+						handleLineLogic(cmds[i], history, true);
 						_exit(0);
 					}
 					else if(pid > 0) {
@@ -416,7 +425,7 @@ int main() {
 				}
 			}
 			else {
-				handleLineLogic(tokens);			
+				handleLineLogic(tokens, history);
 			}
 			std::cout << "$ ";
 		}
