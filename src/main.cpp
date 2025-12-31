@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <algorithm>
+#include <cctype>
 
 struct termios orig_termios;
 bool last_tab;
@@ -358,18 +359,50 @@ int main() {
 	std::sort(commands.begin(), commands.end());
 
 	std::vector<std::string> history;
+	int history_index;
 	char c;
 	std::string input_buffer = "";
 	std::cout << "$ ";
 	while(read(STDIN_FILENO, &c, 1) == 1) {
 		if(c != 9) last_tab = false;
 		if(c == '\r') continue;
+		if(c == 27) {
+			char seq[2];
+
+			if(read(STDIN_FILENO, &seq[0], 1) == 1 && seq[0] == '[') {
+				if(read(STDIN_FILENO, &seq[1], 1) == 1) {
+					if(seq[1] == 'A') {
+						if(history_index > 0) {
+							--history_index;
+							std::cout << "\033[2K\r";
+							input_buffer = history[history_index];
+							std::cout << "$ " + input_buffer;
+						}
+					}
+					else if(seq[1] == 'B') {
+						if(history_index < (int)history.size()) {
+							++history_index;
+							std::cout << "\033[2K\r";
+							if(history_index == (int)history.size()) {
+								input_buffer = "";			
+							}
+							else {
+								input_buffer = history[history_index];
+							}
+							std::cout << "$ " + input_buffer;
+						}
+					}
+				}
+			}
+			continue;
+		}
 		if(c == '\n') {
 			std::cout << '\n';
-			if(!input_buffer.empty())
+			if(!input_buffer.empty()) 
 				history.push_back(input_buffer);
 			std::vector<std::string> tokens = tokenize(input_buffer);
 			input_buffer = "";
+			history_index = history.size();
 			if(tokens.empty()) {
 				std::cout << "$ ";
 				continue;
@@ -448,8 +481,10 @@ int main() {
 			}
 		}
 		else {
-			input_buffer += c;
-			std::cout << c;
+			if(isprint(c)) {
+				input_buffer += c;
+				std::cout << c;
+			}
 		}
 	}
 	return 0;
