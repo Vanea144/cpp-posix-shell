@@ -352,7 +352,7 @@ int main() {
 	std::cout << "$ ";
 	while(read(STDIN_FILENO, &c, 1) == 1) {
 		if(c != 9) last_tab = false;
-		if(c == '\r') continue;
+		//if(c == '\r') continue;
 		if(c == '\n') {
 			std::cout << '\n';
 			std::vector<std::string> tokens = tokenize(input_buffer);
@@ -370,69 +370,50 @@ int main() {
 			}
 
 			if(cmds.size() > 1) {
-					
-				int fds[2] = {-1, -1};
-				if(pipe(fds) < 0) {
-					perror("pipe");
-					continue;
-				}
-				pid_t pid1 = fork();
-				if(pid1 == 0) {
-					dup2(fds[1], STDOUT_FILENO);
-					close(fds[1]);
-					close(fds[0]);
-					
-					handleLineLogic(cmds[0], true);
-					std::cout.flush();
-					std::cerr.flush();
-					_exit(0);
-				}
-				pid_t pid2 = fork();
-				if(pid2 == 0) {
-					dup2(fds[0], STDIN_FILENO);
-					close(fds[1]);
-					close(fds[0]);
-
-					handleLineLogic(cmds[1], true);
-					std::cout.flush();
-					std::cerr.flush();
-					_exit(0);
-				}
-
-				close(fds[0]);
-				close(fds[1]);
-				waitpid(pid1, nullptr, 0);
-				waitpid(pid2, nullptr, 0);
-				/*
 				int prev_input = -1;
 				std::vector<pid_t> pids;
-				for(int i = 0; i < (int)cmds.size(); i++) {
+				for(size_t i = 0; i < cmds.size(); i++) {
+					bool is_last = (i == cmds.size()-1);
 					int fds[2] = {-1, -1};
-					if(pipe(fds) < 0) {
-						perror("pipe");
-						break;
+
+					if(!is_last) {
+						if(pipe(fds) < 0) {
+							perror("pipe");
+							break;
+						}
 					}
-					
+
 					pid_t pid = fork();
-					pids.push_back(pid);
 					if(pid == 0) {
-						dup2(prev_input, STDIN_FILENO);
-						close(prev_input);
-						dup2(fds[1], STDOUT_FILENO);
-						close(fds[1]);
-						close(fds[0]);
-						prev_input = fds[0];
-						handleLineLogic(cmds[i], false);
+						if(prev_input != -1) {
+							dup2(prev_input, STDIN_FILENO);
+							close(prev_input);
+						}
+						if(!is_last) {
+							dup2(fds[1], STDOUT_FILENO);
+							close(fds[0]);
+							close(fds[1]);
+						}
+						handleLineLogic(cmds[i], true);
+						_exit(0);
 					}
 					else if(pid > 0) {
-						close(fds[0]);
-						close(fds[1]);
+						pids.push_back(pid);
+						if(prev_input != -1) {
+                                                        close(prev_input);
+                                                }
+						if(!is_last) {
+							prev_input = fds[0];
+							close(fds[1]);
+						}
+					}
+					else {
+						perror("fork");
 					}
 				}
-
-				for(int i = 0; i < (int)pids.size(); i++) {
-					waitpid(pids[i], nullptr, 0);
-				}*/
+				for(pid_t pid : pids) {
+					waitpid(pid, nullptr, 0);
+				}
 			}
 			else {
 				handleLineLogic(tokens);			
