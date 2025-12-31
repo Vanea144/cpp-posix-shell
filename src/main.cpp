@@ -275,6 +275,66 @@ int main() {
 				continue;
 			}
 
+			std::vector<std::vector<std::string>> cmds;
+			cmds.push_back({});
+			for(const auto& t : tokens) {
+				if(t == "|") cmds.push_back({});
+				else cmds.back().push_back(t);
+			}
+
+			if(cmds.size() > 1) {
+				int pipe_fds[2];
+				if(pipe(pipe_fds) < 0) {
+					perror("pipe");
+					std::cout << "$ ";
+					continue;
+				}
+
+				pid_t pid1 = fork();
+				if(pid1 == 0) {
+					dup2(pipe_fds[1], STDOUT_FILENO);
+					close(pipe_fds[1]);
+					close(pipe_fds[0]);
+
+					std::vector<std::string> args = cmds[0];
+					std::string path = find_path(rawPath, args[0]);
+					std::vector<char*> c_args;
+					for(const std::string& s : args) {
+						c_args.push_back(const_cast<char*>(s.c_str()));
+        				}
+        				c_args.push_back(nullptr);
+					execv(path.c_str(), c_args.data());
+					perror("execv 1");
+					_exit(1);
+				}
+
+				pid_t pid2 = fork();
+				if(pid2 == 0) {
+					dup2(pipe_fds[0], STDIN_FILENO);
+
+					close(pipe_fds[0]);
+					close(pipe_fds[1]);
+
+					std::vector<std::string> args = cmds[1];
+					std::string path = find_path(std::getenv("PATH"), args[0]);
+
+					// Convert args for execv
+					std::vector<char*> c_args;
+					for(const auto& s : args) c_args.push_back(const_cast<char*>(s.c_str()));
+					c_args.push_back(nullptr);
+
+					execv(path.c_str(), c_args.data());
+					perror("execv 2");
+					_exit(1);
+				}
+
+				close(pipe_fds[0]);
+				close(pipe_fds[1]);
+
+				waitpid(pid1, nullptr, 0);
+				waitpid(pid2, nullptr, 0);
+			}
+			else {
 			int saved_stdout = -1, saved_stderr = -1, target_fd;
 			for(int i = 0; i < (int)tokens.size(); i++) {
 				if(tokens[i] == ">" || tokens[i] == "1>" || tokens[i] == "2>" || tokens[i] == ">>" || tokens[i] == "1>>" || tokens[i] == "2>>") {
@@ -310,8 +370,8 @@ int main() {
 			else if(tokens[0] == "type") {
 				if(tokens.size() < 2) {
 					std::cerr << "type: missing argument\n";
-					continue;
 				}
+				else {
 				bool is_builtin = builtin_type(tokens[1]);
 				if(is_builtin) {
 					std::cout << tokens[1] + " is a shell builtin\n";
@@ -327,6 +387,7 @@ int main() {
 						}
 					}
 				}
+				}
 			}
 			else if(tokens[0] == "pwd") {
 				std::cout << get_current_dir() << '\n';
@@ -334,13 +395,14 @@ int main() {
 			else if(tokens[0] == "cd") {
 				if(tokens.size() < 2) {
 					change_directory(std::getenv("HOME"));
-					continue;
 				}
-				if(tokens[1] == "~") {
-					const char* home = std::getenv("HOME");
-					if(home) tokens[1] = home;
+				else {
+					if(tokens[1] == "~") {
+						const char* home = std::getenv("HOME");
+						if(home) tokens[1] = home;
+					}
+					change_directory(tokens[1]);
 				}
-				change_directory(tokens[1]);
 			}
 			else {
 				std::string full_path = find_path(rawPath, tokens[0]);
@@ -350,9 +412,11 @@ int main() {
 				else {
 					std::cout << tokens[0] + ": command not found\n";
 				}
+				
 			}
 			if(saved_stdout != -1) restore_file_redirection(saved_stdout, STDOUT_FILENO);
 			if(saved_stderr != -1) restore_file_redirection(saved_stderr, STDERR_FILENO);
+			}
 			std::cout << "$ ";
 		}
 		else if(c == 9) {
