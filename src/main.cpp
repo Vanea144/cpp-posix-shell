@@ -214,7 +214,7 @@ std::string find_path(const char* path, const std::string& program_name){
 	return "";
 }
 
-void execute_program(const std::string& path, const std::vector<std::string>& tokens) {
+pid_t execute_program(const std::string& path, const std::vector<std::string>& tokens) {
 	std::vector<char*> args;
 	for(const std::string& s : tokens) {
 		args.push_back(const_cast<char*>(s.c_str()));
@@ -228,13 +228,114 @@ void execute_program(const std::string& path, const std::vector<std::string>& to
 		perror("execv");
 		_exit(1);
 	}
-	else if(pid > 0) {
-		int status;
-		waitpid(pid, &status, 0);
-	}
-	else {
+	else if(pid < 0){
 		perror("fork");
 	}
+	return pid;
+}
+
+void handleLineLogic(std::vector<std::string>& tokens, bool needToWait = true) {
+	std::vector<std::string> commands = {"exit", "type", "echo", "pwd", "cd"};
+        std::sort(commands.begin(), commands.end());
+
+        char *rawPath = std::getenv("PATH");
+        auto builtin_type = [&](std::string cmnd) {
+                int l = 0, r = commands.size()-1;
+                while(l <= r) {
+                        int mid = (l+r)/2;
+                        if(commands[mid] == cmnd) return true;
+                        else if(commands[mid] > cmnd) {
+                                r = mid-1;
+                        }
+                        else {
+                                l = mid+1;
+                        }
+                }
+                return false;
+        };
+
+	int saved_stdout = -1, saved_stderr = -1, target_fd;
+	for(int i = 0; i < (int)tokens.size(); i++) {
+		if(tokens[i] == ">" || tokens[i] == "1>" || tokens[i] == "2>" || tokens[i] == ">>" || tokens[i] == "1>>" || tokens[i] == "2>>") {
+			std::string filename;
+			if(i+1 < (int)tokens.size()) {
+				filename = tokens[i+1];
+				target_fd = (tokens[i][0] == '2' ? STDERR_FILENO : STDOUT_FILENO);
+				bool append = tokens[i].find(">>") != std::string::npos;
+				int dummy = open_file_redirection(filename, target_fd, append);
+				if(target_fd == STDOUT_FILENO) {
+					if(saved_stdout == -1) {
+						saved_stdout = dummy;
+					}
+				}
+				else {
+					if(saved_stderr == -1) {
+						saved_stderr = dummy;
+					}
+				}
+				tokens.erase(tokens.begin() + i, tokens.begin() + i + 2);
+				--i;
+			}
+		}
+	}
+	if(tokens[0] == "exit") exit(0);
+	else if(tokens[0] == "echo") {
+		for(int i = 1; i < (int)tokens.size(); i++) {
+			std::cout << tokens[i];
+			if(i != (int)tokens.size()-1) std::cout << ' ';
+		}
+		std::cout << '\n';
+	}
+	else if(tokens[0] == "type") {
+		if(tokens.size() < 2) {
+			std::cerr << "type: missing argument\n";
+		}
+		else {
+		bool is_builtin = builtin_type(tokens[1]);
+		if(is_builtin) {
+			std::cout << tokens[1] + " is a shell builtin\n";
+		}
+		else {
+			if(rawPath != nullptr) {
+				std::string full_path = find_path(rawPath, tokens[1]);
+				if(full_path == "") {
+					std::cout << tokens[1] + ": not found\n";
+				}
+				else {
+					std::cout << tokens[1] + " is " + full_path + "\n"; 
+				}
+			}
+		}
+		}
+	}
+	else if(tokens[0] == "pwd") {
+		std::cout << get_current_dir() << '\n';
+	}
+	else if(tokens[0] == "cd") {
+		if(tokens.size() < 2) {
+			change_directory(std::getenv("HOME"));
+		}
+		else {
+			if(tokens[1] == "~") {
+				const char* home = std::getenv("HOME");
+				if(home) tokens[1] = home;
+			}
+			change_directory(tokens[1]);
+		}
+	}
+	else {
+		std::string full_path = find_path(rawPath, tokens[0]);
+		if(!full_path.empty()) {
+			pid_t pid = execute_program(full_path, tokens);
+			if(needToWait) waitpid(pid, nullptr, 0);
+		}
+		else {
+			std::cout << tokens[0] + ": command not found\n";
+		}
+		
+	}
+	if(saved_stdout != -1) restore_file_redirection(saved_stdout, STDOUT_FILENO);
+	if(saved_stderr != -1) restore_file_redirection(saved_stderr, STDERR_FILENO);
 }
 
 int main() {
@@ -246,26 +347,12 @@ int main() {
 	std::vector<std::string> commands = {"exit", "type", "echo", "pwd", "cd"};
 	std::sort(commands.begin(), commands.end());
 
-	char *rawPath = std::getenv("PATH");
-	auto builtin_type = [&](std::string cmnd) {
-		int l = 0, r = commands.size()-1;
-		while(l <= r) {
-			int mid = (l+r)/2;
-			if(commands[mid] == cmnd) return true;
-			else if(commands[mid] > cmnd) {
-				r = mid-1;
-			}
-			else {
-				l = mid+1;
-			}
-		}
-		return false;
-	};
-
 	char c;
 	std::string input_buffer = "";
 	std::cout << "$ ";
 	while(read(STDIN_FILENO, &c, 1) == 1) {
+		if(c != 9) last_tab = false;
+		if(c == '\r') continue;
 		if(c == '\n') {
 			std::cout << '\n';
 			std::vector<std::string> tokens = tokenize(input_buffer);
@@ -283,139 +370,72 @@ int main() {
 			}
 
 			if(cmds.size() > 1) {
-				int pipe_fds[2];
-				if(pipe(pipe_fds) < 0) {
+					
+				int fds[2] = {-1, -1};
+				if(pipe(fds) < 0) {
 					perror("pipe");
-					std::cout << "$ ";
 					continue;
 				}
-
 				pid_t pid1 = fork();
 				if(pid1 == 0) {
-					dup2(pipe_fds[1], STDOUT_FILENO);
-					close(pipe_fds[1]);
-					close(pipe_fds[0]);
-
-					std::vector<std::string> args = cmds[0];
-					std::string path = find_path(rawPath, args[0]);
-					std::vector<char*> c_args;
-					for(const std::string& s : args) {
-						c_args.push_back(const_cast<char*>(s.c_str()));
-        				}
-        				c_args.push_back(nullptr);
-					execv(path.c_str(), c_args.data());
-					perror("execv 1");
-					_exit(1);
+					dup2(fds[1], STDOUT_FILENO);
+					close(fds[1]);
+					close(fds[0]);
+					
+					handleLineLogic(cmds[0], true);
+					std::cout.flush();
+					std::cerr.flush();
+					_exit(0);
 				}
-
 				pid_t pid2 = fork();
 				if(pid2 == 0) {
-					dup2(pipe_fds[0], STDIN_FILENO);
+					dup2(fds[0], STDIN_FILENO);
+					close(fds[1]);
+					close(fds[0]);
 
-					close(pipe_fds[0]);
-					close(pipe_fds[1]);
-
-					std::vector<std::string> args = cmds[1];
-					std::string path = find_path(std::getenv("PATH"), args[0]);
-
-					// Convert args for execv
-					std::vector<char*> c_args;
-					for(const auto& s : args) c_args.push_back(const_cast<char*>(s.c_str()));
-					c_args.push_back(nullptr);
-
-					execv(path.c_str(), c_args.data());
-					perror("execv 2");
-					_exit(1);
+					handleLineLogic(cmds[1], true);
+					std::cout.flush();
+					std::cerr.flush();
+					_exit(0);
 				}
 
-				close(pipe_fds[0]);
-				close(pipe_fds[1]);
-
+				close(fds[0]);
+				close(fds[1]);
 				waitpid(pid1, nullptr, 0);
 				waitpid(pid2, nullptr, 0);
+				/*
+				int prev_input = -1;
+				std::vector<pid_t> pids;
+				for(int i = 0; i < (int)cmds.size(); i++) {
+					int fds[2] = {-1, -1};
+					if(pipe(fds) < 0) {
+						perror("pipe");
+						break;
+					}
+					
+					pid_t pid = fork();
+					pids.push_back(pid);
+					if(pid == 0) {
+						dup2(prev_input, STDIN_FILENO);
+						close(prev_input);
+						dup2(fds[1], STDOUT_FILENO);
+						close(fds[1]);
+						close(fds[0]);
+						prev_input = fds[0];
+						handleLineLogic(cmds[i], false);
+					}
+					else if(pid > 0) {
+						close(fds[0]);
+						close(fds[1]);
+					}
+				}
+
+				for(int i = 0; i < (int)pids.size(); i++) {
+					waitpid(pids[i], nullptr, 0);
+				}*/
 			}
 			else {
-			int saved_stdout = -1, saved_stderr = -1, target_fd;
-			for(int i = 0; i < (int)tokens.size(); i++) {
-				if(tokens[i] == ">" || tokens[i] == "1>" || tokens[i] == "2>" || tokens[i] == ">>" || tokens[i] == "1>>" || tokens[i] == "2>>") {
-					std::string filename;
-					if(i+1 < (int)tokens.size()) {
-						filename = tokens[i+1];
-						target_fd = (tokens[i][0] == '2' ? STDERR_FILENO : STDOUT_FILENO);
-						bool append = tokens[i].find(">>") != std::string::npos;
-						int dummy = open_file_redirection(filename, target_fd, append);
-						if(target_fd == STDOUT_FILENO) {
-							if(saved_stdout == -1) {
-								saved_stdout = dummy;
-							}
-						}
-						else {
-							if(saved_stderr == -1) {
-								saved_stderr = dummy;
-							}
-						}
-						tokens.erase(tokens.begin() + i, tokens.begin() + i + 2);
-						--i;
-					}
-				}
-			}
-			if(tokens[0] == "exit") return 0;
-			else if(tokens[0] == "echo") {
-				for(int i = 1; i < (int)tokens.size(); i++) {
-					std::cout << tokens[i];
-					if(i != (int)tokens.size()-1) std::cout << ' ';
-				}
-				std::cout << '\n';
-			}
-			else if(tokens[0] == "type") {
-				if(tokens.size() < 2) {
-					std::cerr << "type: missing argument\n";
-				}
-				else {
-				bool is_builtin = builtin_type(tokens[1]);
-				if(is_builtin) {
-					std::cout << tokens[1] + " is a shell builtin\n";
-				}
-				else {
-					if(rawPath != nullptr) {
-						std::string full_path = find_path(rawPath, tokens[1]);
-						if(full_path == "") {
-							std::cout << tokens[1] + ": not found\n";
-						}
-						else {
-							std::cout << tokens[1] + " is " + full_path + "\n"; 
-						}
-					}
-				}
-				}
-			}
-			else if(tokens[0] == "pwd") {
-				std::cout << get_current_dir() << '\n';
-			}
-			else if(tokens[0] == "cd") {
-				if(tokens.size() < 2) {
-					change_directory(std::getenv("HOME"));
-				}
-				else {
-					if(tokens[1] == "~") {
-						const char* home = std::getenv("HOME");
-						if(home) tokens[1] = home;
-					}
-					change_directory(tokens[1]);
-				}
-			}
-			else {
-				std::string full_path = find_path(rawPath, tokens[0]);
-				if(!full_path.empty()) {
-					execute_program(full_path, tokens);
-				}
-				else {
-					std::cout << tokens[0] + ": command not found\n";
-				}
-				
-			}
-			if(saved_stdout != -1) restore_file_redirection(saved_stdout, STDOUT_FILENO);
-			if(saved_stderr != -1) restore_file_redirection(saved_stderr, STDERR_FILENO);
+				handleLineLogic(tokens);			
 			}
 			std::cout << "$ ";
 		}
@@ -437,7 +457,6 @@ int main() {
 			input_buffer += c;
 			std::cout << c;
 		}
-		last_tab = false;
 	}
 	return 0;
 }
