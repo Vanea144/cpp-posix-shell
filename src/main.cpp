@@ -324,7 +324,11 @@ void handleLineLogic(std::vector<std::string>& tokens, std::vector<std::string>&
 		}
 	}
 	else if(tokens[0] == "history") {
-		for(size_t i = 0; i < history.size(); i++) {
+		int count = history.size();
+		if(tokens.size() > 1) {
+			count = std::stoi(tokens[1]);
+		}
+		for(size_t i = history.size()-count; i < history.size(); i++) {
 			std::cout << '\t';
 			std::cout << i+1 << ' ' << history[i] << '\n';
 		}
@@ -359,7 +363,7 @@ int main() {
 	std::cout << "$ ";
 	while(read(STDIN_FILENO, &c, 1) == 1) {
 		if(c != 9) last_tab = false;
-		//if(c == '\r') continue;
+		if(c == '\r') continue;
 		if(c == '\n') {
 			std::cout << '\n';
 			if(!input_buffer.empty())
