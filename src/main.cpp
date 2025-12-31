@@ -235,7 +235,7 @@ pid_t execute_program(const std::string& path, const std::vector<std::string>& t
 }
 
 void handleLineLogic(std::vector<std::string>& tokens, bool needToWait = true) {
-	std::vector<std::string> commands = {"exit", "type", "echo", "pwd", "cd"};
+	std::vector<std::string> commands = {"exit", "type", "echo", "pwd", "cd", "history"};
         std::sort(commands.begin(), commands.end());
 
         char *rawPath = std::getenv("PATH");
@@ -344,7 +344,7 @@ int main() {
   	std::cerr << std::unitbuf;
 
 	enableRawMode();
-	std::vector<std::string> commands = {"exit", "type", "echo", "pwd", "cd"};
+	std::vector<std::string> commands = {"exit", "type", "echo", "pwd", "cd", "history"};
 	std::sort(commands.begin(), commands.end());
 
 	char c;
