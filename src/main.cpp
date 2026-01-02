@@ -341,6 +341,12 @@ void handleLineLogic(std::vector<std::string>& tokens, std::vector<std::string>&
 				writeTo << cmd << '\n';
 			}
 		}
+		else if(tokens.size() > 2 && tokens[1] == "-a") {
+			std::ofstream writeTo(tokens[2], std::ios::app);
+                        for(const auto& cmd : history) {
+                                writeTo << cmd << '\n';
+                        }
+		}
 		else {
 			count = std::min(count, (int)history.size());
 			for(size_t i = history.size()-count; i < history.size(); i++) {
