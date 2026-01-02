@@ -335,6 +335,12 @@ void handleLineLogic(std::vector<std::string>& tokens, std::vector<std::string>&
 			std::string s;
 			while(getline(readFrom, s)) history.push_back(s);	
 		}
+		else if(tokens.size() > 2 && tokens[1] == "-w") {
+			std::ofstream writeTo(tokens[2]);
+			for(auto it : history) {
+				writeTo << it << '\n';
+			}
+		}
 		else {
 			for(size_t i = history.size()-count; i < history.size(); i++) {
 				std::cout << '\t';
