@@ -327,7 +327,7 @@ void handleLineLogic(std::vector<std::string>& tokens, std::vector<std::string>&
 	}
 	else if(tokens[0] == "history") {
 		int count = history.size();
-		if(tokens.size() > 1 && tokens[1] != "-r") {
+		if(tokens.size() == 2) {
 			count = std::stoi(tokens[1]);
 		}
 		if(tokens.size() > 2 && tokens[1] == "-r") {
@@ -337,11 +337,12 @@ void handleLineLogic(std::vector<std::string>& tokens, std::vector<std::string>&
 		}
 		else if(tokens.size() > 2 && tokens[1] == "-w") {
 			std::ofstream writeTo(tokens[2]);
-			for(auto it : history) {
-				writeTo << it << '\n';
+			for(const auto& cmd : history) {
+				writeTo << cmd << '\n';
 			}
 		}
 		else {
+			count = std::min(count, (int)history.size());
 			for(size_t i = history.size()-count; i < history.size(); i++) {
 				std::cout << '\t';
 				std::cout << i+1 << ' ' << history[i] << '\n';
