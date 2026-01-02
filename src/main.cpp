@@ -14,6 +14,7 @@
 
 struct termios orig_termios;
 bool last_tab;
+int history_file_sync_index = 0;
 
 void disableRawMode() {
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
@@ -343,9 +344,10 @@ void handleLineLogic(std::vector<std::string>& tokens, std::vector<std::string>&
 		}
 		else if(tokens.size() > 2 && tokens[1] == "-a") {
 			std::ofstream writeTo(tokens[2], std::ios::app);
-                        for(const auto& cmd : history) {
-                                writeTo << cmd << '\n';
+                        for(size_t i = history_file_sync_index; i < history.size(); i++) {
+                                writeTo << history[i] << '\n';
                         }
+			history_file_sync_index = history.size();
 		}
 		else {
 			count = std::min(count, (int)history.size());
