@@ -10,6 +10,7 @@
 #include <termios.h>
 #include <algorithm>
 #include <cctype>
+#include <fstream>
 
 struct termios orig_termios;
 bool last_tab;
@@ -326,12 +327,19 @@ void handleLineLogic(std::vector<std::string>& tokens, std::vector<std::string>&
 	}
 	else if(tokens[0] == "history") {
 		int count = history.size();
-		if(tokens.size() > 1) {
+		if(tokens.size() > 1 && tokens[1] != "-r") {
 			count = std::stoi(tokens[1]);
 		}
-		for(size_t i = history.size()-count; i < history.size(); i++) {
-			std::cout << '\t';
-			std::cout << i+1 << ' ' << history[i] << '\n';
+		if(tokens.size() > 2 && tokens[1] == "-r") {
+			std::ifstream readFrom(tokens[2]);
+			std::string s;
+			while(getline(readFrom, s)) history.push_back(s);	
+		}
+		else {
+			for(size_t i = history.size()-count; i < history.size(); i++) {
+				std::cout << '\t';
+				std::cout << i+1 << ' ' << history[i] << '\n';
+			}
 		}
 	}
 	else {
@@ -359,7 +367,7 @@ int main() {
 	std::sort(commands.begin(), commands.end());
 
 	std::vector<std::string> history;
-	int history_index;
+	int history_index = 0;
 	char c;
 	std::string input_buffer = "";
 	std::cout << "$ ";
