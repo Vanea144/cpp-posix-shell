@@ -281,7 +281,18 @@ void handleLineLogic(std::vector<std::string>& tokens, std::vector<std::string>&
             }
         }
     }
-    if(tokens[0] == "exit") exit(0);
+    if(tokens[0] == "exit") {
+	    char* hist = std::getenv("HISTFILE");
+	    if(hist) {
+		    std::ofstream writeTo(hist);
+		    if(writeTo.is_open()) {
+			    for(const auto& cmd : history) {
+				    writeTo << cmd << '\n';
+			    }
+		    }
+	    }
+	    exit(0);
+    }
     else if(tokens[0] == "echo") {
         for(int i = 1; i < (int)tokens.size(); i++) {
             std::cout << tokens[i];
