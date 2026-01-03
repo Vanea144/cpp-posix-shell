@@ -154,7 +154,7 @@ std::vector<std::string> tokenize(const std::string& input) {
     std::vector<std::string> tokens;
     std::string current_token = "";
     bool in_squotes = false, in_dquotes = false;
-    std::vector<char> escaped = {'"', '\\'};
+    std::vector<char> escaped = {'\"', '\\'};
 
     for(int i = 0; i < (int)input.size(); i++) {
         char c = input[i];
