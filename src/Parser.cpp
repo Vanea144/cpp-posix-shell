@@ -91,7 +91,7 @@ namespace shell {
 		bool in_squotes = false;
 		bool in_dquotes = false;
 		// Special characters in double quotes
-		std::vector<char> escaped = {'"', '\\', '`', 'n', 't'};
+		std::vector<char> escaped = {'"', '\\', '`', '$'};
 		
 		for(size_t i = 0; i < input.size(); i++) {
 			char c = input[i];
@@ -107,18 +107,24 @@ namespace shell {
 							}
 						} 
 						if(!is_special) {
+							//not special
 							current_string += '\\';
 						}
 						else {
+							//special, skip /
 							++i;
 							current_string += next_c;
 						}
 					}
 					else if(!in_squotes) {
+						//outside quotes
+						//backslash escapes
 						i++;
 						current_string += input[i];
 					}
 					else {
+						//in single quotes
+						//literal
 						current_string += c;
 					}
 				}
